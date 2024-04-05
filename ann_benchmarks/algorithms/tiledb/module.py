@@ -4,7 +4,8 @@ import os
 import tiledb
 
 from tiledb.vector_search.ingestion import ingest
-from tiledb.vector_search.index import IVFFlatIndex
+from tiledb.vector_search import IVFFlatIndex
+from tiledb.cloud.dag import Mode
 import numpy as np
 import multiprocessing
 
@@ -15,17 +16,35 @@ class TileDBIVFFlat(BaseANN):
     def __init__(self, metric, n_list):
         self._n_list = n_list
         self._metric = metric
+        self.MAX_UINT64 = np.iinfo(np.dtype("uint64")).max
 
     def query(self, v, n):
         if self._metric == 'angular':
             raise NotImplementedError()
-        self.res =self.index.query(np.array([v]).astype(numpy.float32), k=n, nthreads=multiprocessing.cpu_count(), nprobe=min(self._n_probe,self._n_list), use_nuv_implementation=True)
-        return self.res[0]
+
+        # query() returns a tuple of (distances, ids).
+        ids = self.index.query(
+            np.array([v]).astype(numpy.float32), 
+            k=n, 
+            nthreads=multiprocessing.cpu_count(), 
+            nprobe=min(self._n_probe,self._n_list), 
+        )[1][0]
+        # Fix for 'OverflowError: Python int too large to convert to C long'.
+        ids[ids == self.MAX_UINT64] = 0
+        return ids 
 
     def batch_query(self, X, n):
         if self._metric == 'angular':
             raise NotImplementedError()
-        self.res =self.index.query(X.astype(numpy.float32), k=n, nthreads=multiprocessing.cpu_count(), nprobe=min(self._n_probe, self._n_list), use_nuv_implementation=True)
+        # query() returns a tuple of (distances, ids).
+        self.res = self.index.query(
+            X.astype(numpy.float32), 
+            k=n, 
+            nthreads=multiprocessing.cpu_count(), 
+            nprobe=min(self._n_probe, self._n_list), 
+        )[1]
+        # Fix for 'OverflowError: Python int too large to convert to C long'.
+        self.res[self.res == self.MAX_UINT64] = 0
 
     def get_batch_results(self):
         return self.res
@@ -47,15 +66,18 @@ class TileDBIVFFlat(BaseANN):
         elif X.dtype == "float32":
             source_type = "F32BIN"
         maxtrain = min(50 * self._n_list, X.shape[0])
-        self.index = ingest(index_type="IVF_FLAT",
-                       array_uri=array_uri,
-                       source_uri=source_uri,
-                       source_type=source_type,
-                       size=X.shape[0],
-                       training_sample_size=maxtrain,
-                       partitions=self._n_list,
-                       input_vectors_per_work_item=100000000,
-                     )
+        self.index = ingest(
+            index_type="IVF_FLAT",
+            index_uri=array_uri,
+            source_uri=source_uri,
+            source_type=source_type,
+            size=X.shape[0],
+            training_sample_size=maxtrain,
+            partitions=self._n_list,
+            input_vectors_per_work_item=100000000,
+            mode=Mode.LOCAL
+        )
+        # memory_budget=-1 will load the data into main memory.
         self.index = IVFFlatIndex(uri=array_uri, dtype=X.dtype, memory_budget=-1)
 
     def set_query_arguments(self, n_probe):
