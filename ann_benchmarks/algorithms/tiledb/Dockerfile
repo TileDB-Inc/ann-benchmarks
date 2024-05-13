@@ -1,8 +1,4 @@
-FROM tiledb_vs
+FROM ann-benchmarks
 
-RUN mamba install -y ansicolors docker-py h5py matplotlib numpy pyyaml psutil scipy scikit-learn jinja2 pandas
-
-WORKDIR /home/app
-COPY requirements.txt run_algorithm.py ./
-RUN pip3 install -r requirements.txt
-ENTRYPOINT ["python", "-u", "run_algorithm.py"]
+RUN pip install tiledb tiledb-vector-search
+RUN python3 -c 'import tiledb.vector_search'
