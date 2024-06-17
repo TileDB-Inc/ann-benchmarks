@@ -5,6 +5,7 @@ import tiledb
 
 from tiledb.vector_search.ingestion import ingest
 from tiledb.vector_search import IVFFlatIndex
+from tiledb.vector_search import IVFPQIndex
 from tiledb.vector_search import FlatIndex
 from tiledb.vector_search import VamanaIndex
 from tiledb.cloud.dag import Mode
@@ -61,14 +62,18 @@ class TileDB(BaseANN):
         if os.path.isfile(array_uri):
             os.remove(array_uri)
 
+        dimensions = X.shape[1]
         self.index = ingest(
             index_type=self._index_type,
             index_uri=array_uri,
             input_vectors=X,
             partitions=self._n_list,
+            num_subspaces=dimensions/2
         )
         if self._index_type == "IVF_FLAT":
             self.index = IVFFlatIndex(uri=array_uri)
+        elif self._index_type == "IVF_PQ":
+            self.index = IVFPQIndex(uri=array_uri)
         elif self._index_type == "FLAT":
             self.index = FlatIndex(uri=array_uri)
         elif self._index_type == "VAMANA":
@@ -115,3 +120,18 @@ class TileDBVamana(TileDB):
     
     def __str__(self):
         return 'TileDBVamana(opt_l=%d)' % (self._opt_l)
+
+class TileDBIVFPQ(TileDB):
+    def __init__(self, metric, _):
+        super().__init__(
+            index_type="IVF_PQ",
+            metric=metric
+        )
+    
+    def set_query_arguments(self, n_probe):
+        self._n_probe = n_probe
+        # Set so that `nprobe=min(self._n_probe, self._n_list)` is set to `n_probe`.
+        self._n_list = n_probe
+    
+    def __str__(self):
+        return 'TileDBIVFPQ(n_probe=%d)' % (self._n_probe)
