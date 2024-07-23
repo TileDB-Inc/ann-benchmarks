@@ -16,11 +16,12 @@ from ..base.module import BaseANN
 MAX_UINT64 = np.iinfo(np.dtype("uint64")).max
 
 class TileDB(BaseANN):
-    def __init__(self, metric, index_type, n_list = -1, l_build = -1):
+    def __init__(self, metric, index_type, n_list = -1, l_build = -1, r_max_degree = -1):
         self._index_type = index_type
         self._metric = metric
         self._n_list = n_list
         self._l_build = l_build
+        self._r_max_degree = r_max_degree
         self._n_probe = -1
         self._opt_l = -1
 
@@ -68,7 +69,7 @@ class TileDB(BaseANN):
             input_vectors=X,
             partitions=self._n_list,
             l_build=self._l_build,
-            r_max_degree=self._l_build,
+            r_max_degree=self._r_max_degree,
             num_subspaces=dimensions/2
         )
         if self._index_type == "IVF_FLAT":
@@ -110,18 +111,19 @@ class TileDBFlat(TileDB):
         return 'TileDBFlat()'
 
 class TileDBVamana(TileDB):
-    def __init__(self, metric, l_build):
+    def __init__(self, metric, l_build_and_r_max_degree):
         super().__init__(
             index_type="VAMANA",
             metric=metric,
-            l_build=l_build
+            l_build=l_build_and_r_max_degree,
+            r_max_degree=l_build_and_r_max_degree
         )
     
     def set_query_arguments(self, opt_l):
         self._opt_l = opt_l
     
     def __str__(self):
-        return 'TileDBVamana(l_build=%d, opt_l=%d)' % (self._l_build, self._opt_l)
+        return 'TileDBVamana(l_build=%d, r_max_degree=%d, opt_l=%d)' % (self._l_build, self._r_max_degree, self._opt_l)
 
 class TileDBIVFPQ(TileDB):
     def __init__(self, metric, n_list):
