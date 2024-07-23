@@ -63,6 +63,7 @@ jobs:
           - scann
           - sptag
           - tinyknn
+          - tiledb
           - vald
           - vearch
           - vespa

@@ -1,7 +1,8 @@
-from __future__ import absolute_import
-import numpy
 import os
-import tiledb
+import numpy as np
+import multiprocessing
+
+from ..base.module import BaseANN
 
 from tiledb.vector_search.ingestion import ingest
 from tiledb.vector_search import IVFFlatIndex
@@ -9,19 +10,17 @@ from tiledb.vector_search import IVFPQIndex
 from tiledb.vector_search import FlatIndex
 from tiledb.vector_search import VamanaIndex
 from tiledb.cloud.dag import Mode
-import numpy as np
-import multiprocessing
-
 
 from ..base.module import BaseANN
 
 MAX_UINT64 = np.iinfo(np.dtype("uint64")).max
 
 class TileDB(BaseANN):
-    def __init__(self, metric, index_type, n_list = -1):
+    def __init__(self, metric, index_type, n_list = -1, l_build = -1):
         self._index_type = index_type
         self._metric = metric
         self._n_list = n_list
+        self._l_build = l_build
         self._n_probe = -1
         self._opt_l = -1
 
@@ -68,6 +67,8 @@ class TileDB(BaseANN):
             index_uri=array_uri,
             input_vectors=X,
             partitions=self._n_list,
+            l_build=self._l_build,
+            r_max_degree=self._l_build,
             num_subspaces=dimensions/2
         )
         if self._index_type == "IVF_FLAT":
@@ -109,29 +110,29 @@ class TileDBFlat(TileDB):
         return 'TileDBFlat()'
 
 class TileDBVamana(TileDB):
-    def __init__(self, metric, _):
+    def __init__(self, metric, l_build):
         super().__init__(
             index_type="VAMANA",
-            metric=metric
+            metric=metric,
+            l_build=l_build
         )
     
     def set_query_arguments(self, opt_l):
         self._opt_l = opt_l
     
     def __str__(self):
-        return 'TileDBVamana(opt_l=%d)' % (self._opt_l)
+        return 'TileDBVamana(l_build=%d, opt_l=%d)' % (self._l_build, self._opt_l)
 
 class TileDBIVFPQ(TileDB):
-    def __init__(self, metric, _):
+    def __init__(self, metric, n_list):
         super().__init__(
             index_type="IVF_PQ",
-            metric=metric
+            metric=metric,
+            n_list=n_list
         )
     
     def set_query_arguments(self, n_probe):
         self._n_probe = n_probe
-        # Set so that `nprobe=min(self._n_probe, self._n_list)` is set to `n_probe`.
-        self._n_list = n_probe
-    
+
     def __str__(self):
-        return 'TileDBIVFPQ(n_probe=%d)' % (self._n_probe)
+        return 'TileDBIVFPQ(n_list=%d, n_probe=%d)' % (self._n_list, self._n_probe)
