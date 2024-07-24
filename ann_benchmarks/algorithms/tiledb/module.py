@@ -31,7 +31,7 @@ class TileDB(BaseANN):
 
         # query() returns a tuple of (distances, ids).
         ids = self.index.query(
-            np.array([v]).astype(numpy.float32), 
+            np.array([v]).astype(np.float32), 
             k=n, 
             nthreads=multiprocessing.cpu_count(), 
             nprobe=min(self._n_probe, self._n_list), 
@@ -46,7 +46,7 @@ class TileDB(BaseANN):
             raise NotImplementedError()
         # query() returns a tuple of (distances, ids).
         self.res = self.index.query(
-            X.astype(numpy.float32), 
+            X.astype(np.float32), 
             k=n, 
             nthreads=multiprocessing.cpu_count(), 
             nprobe=min(self._n_probe, self._n_list), 
