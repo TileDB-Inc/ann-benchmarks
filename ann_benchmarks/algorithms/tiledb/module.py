@@ -16,14 +16,15 @@ from ..base.module import BaseANN
 MAX_UINT64 = np.iinfo(np.dtype("uint64")).max
 
 class TileDB(BaseANN):
-    def __init__(self, metric, index_type, n_list = -1, l_build = -1, r_max_degree = -1):
+    def __init__(self, metric, index_type, n_list = -1, l_build = -1, r_max_degree = -1, num_subspaces_divisor = -1):
         self._index_type = index_type
         self._metric = metric
         self._n_list = n_list
         self._l_build = l_build
         self._r_max_degree = r_max_degree
+        self._num_subspaces_divisor = num_subspaces_divisor
         self._n_probe = -1
-        self._opt_l = -1
+        self._l_search = -1
 
     def query(self, v, n):
         if self._metric == 'angular':
@@ -35,7 +36,7 @@ class TileDB(BaseANN):
             k=n, 
             nthreads=multiprocessing.cpu_count(), 
             nprobe=min(self._n_probe, self._n_list), 
-            opt_l=self._opt_l
+            l_search=self._l_search
         )[1][0]
         # Fix for 'OverflowError: Python int too large to convert to C long'.
         ids[ids == MAX_UINT64] = 0
@@ -50,6 +51,7 @@ class TileDB(BaseANN):
             k=n, 
             nthreads=multiprocessing.cpu_count(), 
             nprobe=min(self._n_probe, self._n_list), 
+            l_search=self._l_search
         )[1]
         # Fix for 'OverflowError: Python int too large to convert to C long'.
         self.res[self.res == MAX_UINT64] = 0
@@ -70,7 +72,7 @@ class TileDB(BaseANN):
             partitions=self._n_list,
             l_build=self._l_build,
             r_max_degree=self._r_max_degree,
-            num_subspaces=dimensions/2
+            num_subspaces=dimensions/self._num_subspaces_divisor
         )
         if self._index_type == "IVF_FLAT":
             self.index = IVFFlatIndex(uri=array_uri)
@@ -111,30 +113,31 @@ class TileDBFlat(TileDB):
         return 'TileDBFlat()'
 
 class TileDBVamana(TileDB):
-    def __init__(self, metric, l_build_and_r_max_degree):
+    def __init__(self, metric, r_max_degree):
         super().__init__(
             index_type="VAMANA",
             metric=metric,
-            l_build=l_build_and_r_max_degree,
-            r_max_degree=l_build_and_r_max_degree
+            l_build=60,
+            r_max_degree=r_max_degree
         )
     
-    def set_query_arguments(self, opt_l):
-        self._opt_l = opt_l
+    def set_query_arguments(self, l_search):
+        self._l_search = l_search
     
     def __str__(self):
-        return 'TileDBVamana(l_build=%d, r_max_degree=%d, opt_l=%d)' % (self._l_build, self._r_max_degree, self._opt_l)
+        return 'TileDBVamana(l_build=%d, r_max_degree=%d, l_search=%d)' % (self._l_build, self._r_max_degree, self._l_search)
 
 class TileDBIVFPQ(TileDB):
-    def __init__(self, metric, n_list):
+    def __init__(self, metric, n_list, num_subspaces_divisor):
         super().__init__(
             index_type="IVF_PQ",
             metric=metric,
-            n_list=n_list
+            n_list=n_list,
+            num_subspaces_divisor=num_subspaces_divisor
         )
     
     def set_query_arguments(self, n_probe):
         self._n_probe = n_probe
 
     def __str__(self):
-        return 'TileDBIVFPQ(n_list=%d, n_probe=%d)' % (self._n_list, self._n_probe)
+        return 'TileDBIVFPQ(n_list=%d, n_probe=%d, num_subspaces_divisor=%d)' % (self._n_list, self._n_probe, self._num_subspaces_divisor)
